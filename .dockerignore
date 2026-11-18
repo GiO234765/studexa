@@ -1,0 +1,11 @@
+.git
+**/.env
+**/.env.*
+**/node_modules
+**/*.log
+backend/target
+backend/src/main/resources/static
+frontend/dist
+frontend/test-results
+frontend/playwright-report
+studyapp

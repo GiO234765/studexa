@@ -1,0 +1,85 @@
+name: CI
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+
+env:
+  # Backend
+  MAVEN_OPTS: -Xmx2g -XX:MaxMetaspaceSize=512m
+  SPRING_PROFILES_ACTIVE: test
+  TEST_DB_URL: jdbc:postgresql://localhost:5432/studexa_test
+  DB_USER: studexa
+  DB_PASSWORD: studexa_ci_password
+  JWT_SECRET: ci-integration-test-secret-0123456789abcdef
+  # 32+ bytes, satisfies JwtConfig minimum
+  APP_FRONTEND_URL: http://localhost:5173
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: studexa
+          POSTGRES_PASSWORD: studexa_ci_password
+          POSTGRES_DB: studexa_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U studexa -d studexa_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Java 21 (Temurin)
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+          cache: maven
+
+      - name: Backend compile + verify
+        working-directory: ./backend
+        run: sh ./mvnw -B verify
+
+      - name: Upload backend test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-test-reports
+          path: backend/target/surefire-reports/
+
+  frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        working-directory: ./frontend
+        run: npm ci
+
+      - name: Lint
+        working-directory: ./frontend
+        run: npm run lint
+
+      - name: Tests
+        working-directory: ./frontend
+        run: npm test
+
+      - name: Build
+        working-directory: ./frontend
+        run: npm run build

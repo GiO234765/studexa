@@ -1,0 +1,125 @@
+spring:
+  config:
+    import: optional:file:.env[.properties]
+  application:
+    name: studexa
+  threads:
+    virtual:
+      enabled: true
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:${DB_PORT:5432}/studexa}
+    username: ${DB_USER:studexa}
+    password: ${DB_PASSWORD:change_me_locally}
+    hikari:
+      maximum-pool-size: 10
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        jdbc:
+          time_zone: UTC
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+
+server:
+  port: ${SERVER_PORT:${PORT:8080}}
+  error:
+    include-stacktrace: never
+    include-message: never
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      show-details: never
+
+app:
+  beta:
+    enabled: ${BETA_ENABLED:false}
+    registration-open: ${BETA_REGISTRATION_OPEN:true}
+  frontend-url: ${FRONTEND_URL:http://localhost:5173}
+  game:
+    xp-per-review: ${GAME_XP_PER_REVIEW:3}
+    xp-bonus-good-easy: ${GAME_XP_BONUS_GOOD_EASY:2}
+    xp-finish-session: ${GAME_XP_FINISH_SESSION:20}
+    xp-finish-session-min-cards: ${GAME_XP_FINISH_SESSION_MIN_CARDS:5}
+    max-sessions-per-day: ${GAME_MAX_SESSIONS_PER_DAY:5}
+    xp-focus-session: ${GAME_XP_FOCUS_SESSION:25}
+    xp-focus-session-min-minutes: ${GAME_XP_FOCUS_SESSION_MIN_MINUTES:25}
+    max-focus-sessions-per-day: ${GAME_MAX_FOCUS_SESSIONS_PER_DAY:8}
+    xp-create-card: ${GAME_XP_CREATE_CARD:2}
+    xp-create-note: ${GAME_XP_CREATE_NOTE:5}
+    max-create-xp-per-day: ${GAME_MAX_CREATE_XP_PER_DAY:20}
+    xp-daily-goal: ${GAME_XP_DAILY_GOAL:30}
+    xp-boss-win: ${GAME_XP_BOSS_WIN:100}
+    xp-quiz-base: ${GAME_XP_QUIZ_BASE:10}
+    xp-quiz-per-correct: ${GAME_XP_QUIZ_PER_CORRECT:1}
+    max-quizzes-per-day: ${GAME_MAX_QUIZZES_PER_DAY:5}
+    streak-bonus-per-seven-days: ${GAME_STREAK_BONUS_PER_SEVEN_DAYS:0.10}
+    max-streak-bonus: ${GAME_MAX_STREAK_BONUS:0.50}
+    daily-xp-cap: ${GAME_DAILY_XP_CAP:600}
+    level-xp-base: ${GAME_LEVEL_XP_BASE:100}
+    level-xp-increment: ${GAME_LEVEL_XP_INCREMENT:50}
+    level-up-coins: ${GAME_LEVEL_UP_COINS:20}
+    streak-freeze-cost: ${GAME_STREAK_FREEZE_COST:50}
+    max-freezes-held: ${GAME_MAX_FREEZES_HELD:2}
+
+    # --- Coins (Section 7.4) ---
+    coins-per-ten-xp: ${GAME_COINS_PER_TEN_XP:1}
+    coins-per-level-up: ${GAME_COINS_PER_LEVEL_UP:10}
+
+    # --- Badges (Section 7.5) ---
+    badge-seed: []
+
+    # --- Anti-cheat (Section 7.11) ---
+    too-fast-threshold-ms: ${GAME_TOO_FAST_THRESHOLD_MS:800}
+    too-fast-consecutive-count: ${GAME_TOO_FAST_CONSECUTIVE_COUNT:10}
+    offline-max-days-ago: ${GAME_OFFLINE_MAX_DAYS_AGO:7}
+    max-reviews-per-card-per-day: ${GAME_MAX_REVIEWS_PER_CARD_PER_DAY:1}
+
+  cors:
+    allowed-origin: ${FRONTEND_URL:http://localhost:5173}
+  jwt:
+    # Dev-only default. Always set JWT_SECRET outside local development (32+ bytes).
+    secret: ${JWT_SECRET:dev-only-secret-change-me-0123456789abcdef}
+    issuer: ${JWT_ISSUER:https://studexa.app}
+    access-token-ttl: ${JWT_ACCESS_TTL:15m}
+    refresh-token-ttl: ${JWT_REFRESH_TTL:30d}
+    refresh-cookie-secure: ${JWT_COOKIE_SECURE:false}
+  oauth:
+    google:
+      enabled: ${GOOGLE_LOGIN_ENABLED:false}
+      client-id: ${GOOGLE_CLIENT_ID:}
+      client-secret: ${GOOGLE_CLIENT_SECRET:}
+  ai:
+    api-key: ${ANTHROPIC_API_KEY:}
+    model: ${ANTHROPIC_MODEL:claude-sonnet-4-5}
+    daily-limit: ${AI_DAILY_LIMIT:10}
+    max-source-chars: ${AI_MAX_SOURCE_CHARS:12000}
+    timeout: ${AI_TIMEOUT:45s}
+    gemini-api-key: ${GEMINI_API_KEY:}
+    gemini-model: ${GEMINI_MODEL:gemini-3.5-flash-lite}
+    gemini-enabled: ${GEMINI_ENABLED:false}
+  security:
+    auth-rate-limit:
+      enabled: ${AUTH_RATE_LIMIT_ENABLED:true}
+      max-requests: ${AUTH_RATE_LIMIT_MAX:30}
+      window-seconds: ${AUTH_RATE_LIMIT_WINDOW:60}
+
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html
+    operations-sorter: alpha
+  api-docs:
+    path: /v3/api-docs
+
+logging:
+  level:
+    root: INFO
+    com.studexa: DEBUG
