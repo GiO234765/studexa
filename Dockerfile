@@ -5,7 +5,7 @@ RUN npm ci --no-audit --no-fund
 COPY frontend/ ./
 ARG VITE_BETA_SUPPORT_EMAIL
 ENV VITE_BETA_ENABLED=true
-RUN test -n "$VITE_BETA_SUPPORT_EMAIL" && npm run build
+RUN npm run build
 
 FROM eclipse-temurin:21-jdk AS backend
 WORKDIR /app/backend
