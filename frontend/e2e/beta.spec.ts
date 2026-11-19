@@ -195,6 +195,8 @@ test.describe('passage tools with mobile touch', () => {
     await expect(ask.getByText(/During beta, AI can study public readings/)).toBeVisible()
     await expect(ask.getByRole('button', { name: 'Summarize' })).toHaveCount(0)
     await ask.getByRole('button', { name: 'Close' }).tap()
+    await expect(ask).toBeHidden()
+    await note.press('ArrowRight')
     await note.press('End')
     await note.press('Enter')
     await page.keyboard.insertText('Read the chapter again.')
