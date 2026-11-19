@@ -95,6 +95,27 @@ Open `http://localhost:5173`. In development the Vite dev server proxies `/api` 
 register or sign in. Registration signs you in, saves your onboarding profile to the backend, and
 then opens the app.
 
+If port `8080` is already in use on Windows, start the backend on port `8081` in PowerShell:
+
+```powershell
+cd backend
+$env:SERVER_PORT = '8081'
+.\mvnw.cmd spring-boot:run
+```
+
+In a separate PowerShell window at the repository root, point Vite at the same port:
+
+```powershell
+cd frontend
+$env:STUDEXA_DEV_API_ORIGIN = 'http://localhost:8081'
+npm.cmd run dev -- --port 5173 --strictPort
+```
+
+Before opening the app, check that `http://localhost:8081/api/v1/health` and
+`http://localhost:5173/api/v1/health` both return `{"status":"ok","db":"up"}`.
+To keep this port across restarts, put `STUDEXA_DEV_API_ORIGIN=http://localhost:8081`
+in `frontend/.env.development.local`. The terminal variable takes precedence when set.
+
 Set `VITE_API_URL` in `frontend/.env.local` only if the backend is not reachable through the proxy:
 
 ```bash
@@ -229,8 +250,16 @@ cd backend
 | POST | `/ai/generate` | Generate grounded flashcards or quiz questions |
 | POST | `/ai/tutor` | Ask the floating AI study pet a question, optionally grounded in notes |
 
-Set `ANTHROPIC_API_KEY` in the backend environment to enable AI. The key never reaches the browser
-or the repository. If it is missing, both endpoints return **503** with code `AI_NOT_CONFIGURED`.
+For local Gemini, put `GEMINI_API_KEY`, `GEMINI_ENABLED=true`, and
+`GEMINI_MODEL=gemini-3.5-flash-lite` in the Git-ignored `backend/.env`. Start the backend
+from `backend` so Spring reads the file, and restart it after changing the key. Shell environment
+variables take precedence. Outside the private beta, `ANTHROPIC_API_KEY` also enables Anthropic
+when Gemini is disabled or has no key.
+
+An unconfigured provider returns `AI_NOT_CONFIGURED`. If Google rejects the key or denies project
+access, Studexa returns `AI_PROVIDER_ACCESS_DENIED` (HTTP 503). Check the key and project in
+[Google AI Studio](https://aistudio.google.com/api-keys).
+
 Requests are limited by `AI_DAILY_LIMIT` (default 10 calls per UTC day). References are returned
 only when the model's `sourceExcerpt` is an exact substring of the supplied notes or deck text, so
 the app never displays an invented citation.

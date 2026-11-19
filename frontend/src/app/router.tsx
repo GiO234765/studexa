@@ -2,7 +2,7 @@ import { createBrowserRouter, Navigate } from 'react-router-dom'
 import { betaEnabled } from '../lib/beta'
 import {
   AppShell, AuthCallbackPage, AuthPage, BossPage, CreateRoomPage, DeckEditorPage, DecksPage, DesignPage,
-  ErrorBoundary, ExplorePage, HomePage, JoinRoomPage, LandingPage, LazyRoute, LobbyPage, MinigamesPage,
+  ErrorBoundary, ExplorePage, HomePage, JoinRoomPage, LandingPage, LazyRoute, LibraryPage, LobbyPage, MinigamesPage, ReaderPage,
   NoteEditorPage, NotesPage, OnboardingPage, PlanPage, PlayPage, ProfilePage, QuizPage, RequireAuth,
   ResultsPage, ReviewPage, SettingsPage, StatsPage, StudexaHeroDemoPage, StudyPage, SubjectsPage, TimerPage,
 } from './routeComponents'
@@ -13,7 +13,7 @@ export const router = createBrowserRouter([
     element: (
       <ErrorBoundary>
         <LazyRoute>
-          <AuthPage mode="login" />
+          <AuthPage key="login" mode="login" />
         </LazyRoute>
       </ErrorBoundary>
     ),
@@ -23,7 +23,7 @@ export const router = createBrowserRouter([
     element: (
       <ErrorBoundary>
         <LazyRoute>
-          <AuthPage mode="register" />
+          <AuthPage key="register" mode="register" />
         </LazyRoute>
       </ErrorBoundary>
     ),
@@ -50,27 +50,27 @@ export const router = createBrowserRouter([
   },
   {
     path: '/quiz',
-    element: betaEnabled ? <Navigate to="/study/quiz" replace /> : <LandingPage />,
+    element: <RequireAuth accountOnly><LandingPage /></RequireAuth>,
   },
   {
     path: '/quiz/create',
-    element: betaEnabled ? <Navigate to="/study/quiz" replace /> : <RequireAuth><CreateRoomPage /></RequireAuth>,
+    element: <RequireAuth accountOnly><CreateRoomPage /></RequireAuth>,
   },
   {
     path: '/quiz/join',
-    element: betaEnabled ? <Navigate to="/study/quiz" replace /> : <RequireAuth><JoinRoomPage /></RequireAuth>,
+    element: <RequireAuth accountOnly><JoinRoomPage /></RequireAuth>,
   },
   {
     path: '/quiz/lobby/:code',
-    element: betaEnabled ? <Navigate to="/study/quiz" replace /> : <RequireAuth><LobbyPage /></RequireAuth>,
+    element: <RequireAuth accountOnly><LobbyPage /></RequireAuth>,
   },
   {
     path: '/quiz/play/:sessionId',
-    element: betaEnabled ? <Navigate to="/study/quiz" replace /> : <RequireAuth><PlayPage /></RequireAuth>,
+    element: <RequireAuth accountOnly><PlayPage /></RequireAuth>,
   },
   {
     path: '/quiz/results/:sessionId',
-    element: betaEnabled ? <Navigate to="/study/quiz" replace /> : <RequireAuth><ResultsPage /></RequireAuth>,
+    element: <RequireAuth accountOnly><ResultsPage /></RequireAuth>,
   },
   {
     path: '/onboarding',
@@ -105,6 +105,10 @@ export const router = createBrowserRouter([
             <StudyPage />
           </LazyRoute>
         ),
+      },
+      {
+        path: 'library',
+        element: <LazyRoute><LibraryPage /></LazyRoute>,
       },
       {
         path: 'subjects',
@@ -214,9 +218,13 @@ export const router = createBrowserRouter([
         path: 'explore',
         element: (
           <LazyRoute>
-            {betaEnabled ? <Navigate to="/" replace /> : <ExplorePage />}
+            <ExplorePage />
           </LazyRoute>
         ),
+      },
+      {
+        path: 'explore/read/:readingId',
+        element: <LazyRoute><ReaderPage /></LazyRoute>,
       },
       {
         path: 'settings',

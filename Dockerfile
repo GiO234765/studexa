@@ -4,6 +4,7 @@ COPY frontend/package.json frontend/package-lock.json ./
 RUN npm ci --no-audit --no-fund
 COPY frontend/ ./
 ARG VITE_BETA_SUPPORT_EMAIL
+ARG VITE_TELEGRAM_URL
 ENV VITE_BETA_ENABLED=true
 RUN npm run build
 

@@ -12,9 +12,11 @@ import { useStudySamples } from '../../lib/useStudySamples'
 import { celebrate } from '../../lib/confetti'
 import { playSound } from '../../lib/sound'
 import { aiApi, type DeckSummary, type StudyCard } from '../../lib/api'
+import { aiErrorMessage } from '../../lib/aiErrors'
 import { useDeckCards, useDecks } from '../../lib/study'
 import { useApp } from '../../lib/store'
 import { betaEnabled, maxBetaAiItems } from '../../lib/beta'
+import { isGuestMode } from '../../lib/auth'
 
 type Question = {
   id: string
@@ -193,6 +195,7 @@ export function QuizPage() {
         <h1 className="text-2xl font-black">{t('quiz.emptyTitle')}</h1>
         <p className="text-[var(--color-muted)]">{t('quiz.emptyHint')}</p>
         <Button onClick={() => navigate('/study/decks')}>{t('quiz.addCards')}</Button>
+        {!isGuestMode() && <Link to="/quiz" className="study-text-link">{t('quizRoom.liveRooms')}</Link>}
       </div>
     )
   }
@@ -274,6 +277,7 @@ export function QuizPage() {
             <div>
               <h1 className="text-2xl font-black">{t('quiz.setupTitle')}</h1>
               <p className="text-sm text-[var(--color-muted)]">{t(betaEnabled ? 'beta.quizHint' : 'quiz.setupHint')}</p>
+              {!isGuestMode() && <Link to="/quiz" className="study-text-link mt-2">{t('quizRoom.liveRooms')}</Link>}
             </div>
           </div>
 
@@ -335,8 +339,8 @@ export function QuizPage() {
               </p>
             )}
             {generate.isError && (
-              <p className="rounded-xl bg-[var(--color-danger-soft)] px-3 py-2 text-sm font-bold text-[var(--color-danger)]">
-                {generate.error.message}
+              <p role="alert" className="rounded-xl bg-[var(--color-danger-soft)] px-3 py-2 text-sm font-bold text-[var(--color-danger)]">
+                {aiErrorMessage(t, generate.error)}
               </p>
             )}
 

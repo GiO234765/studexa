@@ -83,3 +83,96 @@ jobs:
       - name: Build
         working-directory: ./frontend
         run: npm run build
+
+  beta-browser:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      TEST_DB_URL: jdbc:postgresql://127.0.0.1:5432/studexa_beta_test
+      PGHOST: 127.0.0.1
+      PGDATABASE: studexa_beta_test
+      PGUSER: studexa
+      PGPASSWORD: studexa_ci_password
+      SERVER_PORT: 8081
+      FRONTEND_URL: http://127.0.0.1:5173
+      BETA_ENABLED: 'true'
+      VITE_BETA_ENABLED: 'true'
+      GEMINI_ENABLED: 'false'
+      STUDEXA_DEV_API_ORIGIN: http://127.0.0.1:8081
+      BETA_E2E_URL: http://127.0.0.1:5173
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: studexa
+          POSTGRES_PASSWORD: studexa_ci_password
+          POSTGRES_DB: studexa_beta_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U studexa -d studexa_beta_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Java 21 (Temurin)
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+          cache: maven
+
+      - name: Set up Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Package backend
+        working-directory: ./backend
+        run: sh ./mvnw -B -ntp -Dmaven.test.skip=true package
+
+      - name: Install browser test dependencies
+        working-directory: ./frontend
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+          command -v psql || sudo apt-get install -y postgresql-client
+
+      - name: Start app and run beta browser tests
+        shell: bash
+        run: |
+          java -jar backend/target/studexa-*.jar >"$RUNNER_TEMP/studexa-backend.log" 2>&1 &
+          backend_pid=$!
+          npm --prefix frontend run dev -- --host 127.0.0.1 --port 5173 --strictPort >"$RUNNER_TEMP/studexa-vite.log" 2>&1 &
+          vite_pid=$!
+          trap 'kill "$backend_pid" "$vite_pid" 2>/dev/null || true' EXIT
+
+          health_url="$BETA_E2E_URL/api/v1/health"
+          for attempt in {1..30}; do
+            if curl --fail --silent --max-time 3 "$health_url" | jq -e '.status == "ok" and .db == "up"' >/dev/null; then
+              npm --prefix frontend run test:beta
+              exit
+            fi
+            if ! kill -0 "$backend_pid" "$vite_pid" 2>/dev/null; then
+              break
+            fi
+            sleep 2
+          done
+
+          echo "::error::Studexa did not report a healthy database through Vite at $health_url after $attempt checks. Check the Spring Boot and Vite logs and verify STUDEXA_DEV_API_ORIGIN=$STUDEXA_DEV_API_ORIGIN."
+          exit 1
+
+      - name: Upload browser test diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: beta-browser-diagnostics
+          path: |
+            ${{ runner.temp }}/studexa-backend.log
+            ${{ runner.temp }}/studexa-vite.log
+            frontend/test-results/

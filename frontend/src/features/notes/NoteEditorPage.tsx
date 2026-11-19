@@ -1,8 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { useEditor, EditorContent } from '@tiptap/react'
+import { useEditor, useEditorState, EditorContent } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
 import { Button } from '../../components/Button'
 import { EmptyState } from '../../components/EmptyState'
@@ -12,8 +11,9 @@ import { useApp, type Note } from '../../lib/store'
 import { openStudyBuddy } from '../../lib/aiStudy'
 import { betaEnabled } from '../../lib/beta'
 import { isGuestMode, useAuth } from '../../lib/auth'
-import { cardsApi } from '../../lib/api'
-import { studyKeys, useDecks } from '../../lib/study'
+import { PassageTools } from '../passages/PassageTools'
+import { NoteAttachments } from './NoteAttachments'
+import { NoteStudy, type NoteStudySource } from './NoteStudy'
 
 export function NoteEditorPage() {
   const { t } = useTranslation()
@@ -23,7 +23,7 @@ export function NoteEditorPage() {
   const note = notes.find((n) => n.id === noteId)
 
   useEffect(() => {
-    loadNotes()
+    void loadNotes().catch(() => undefined)
   }, [loadNotes])
 
   if (!note) {
@@ -41,22 +41,18 @@ export function NoteEditorPage() {
 function NoteEditor({ note }: { note: Note }) {
   const { t } = useTranslation()
   const navigate = useNavigate()
-  const { data: decks = [] } = useDecks()
-  const queryClient = useQueryClient()
   const userId = useAuth((state) => state.user?.id)
+  const accountId = isGuestMode() ? undefined : userId
   const updateNote = useApp((s) => s.updateNote)
   const deleteNote = useApp((s) => s.deleteNote)
-  const addCard = useApp((s) => s.addCard)
 
   const [title, setTitle] = useState(note.title)
   const [status, setStatus] = useState<'saved' | 'saving' | 'error'>('saved')
   const [selectedText, setSelectedText] = useState('')
-  const [cardOpen, setCardOpen] = useState(false)
   const [deleteOpen, setDeleteOpen] = useState(false)
-  const [cardFront, setCardFront] = useState('')
-  const [cardBack, setCardBack] = useState('')
-  const [deckId, setDeckId] = useState(decks[0]?.id ?? '')
   const [flash, setFlash] = useState<string | null>(null)
+  const [studySource, setStudySource] = useState<NoteStudySource>()
+  const passageSource = useRef<HTMLDivElement>(null)
   const saveTimer = useRef<number | null>(null)
   const initial = { title: note.title, content: note.content }
   const latest = useRef(initial)
@@ -98,7 +94,7 @@ function NoteEditor({ note }: { note: Note }) {
     onUpdate: ({ editor: current }) => queueSave({ content: current.getHTML() }),
     onSelectionUpdate: ({ editor: current }) => {
       const { from, to } = current.state.selection
-      const text = current.state.doc.textBetween(from, to, ' ').trim()
+      const text = current.state.doc.textBetween(from, to, '\n').trim()
       setSelectedText(text)
     },
   })
@@ -109,33 +105,6 @@ function NoteEditor({ note }: { note: Note }) {
     }
   }, [])
 
-  const openCardModal = () => {
-    setCardFront(selectedText)
-    setCardBack('')
-    setDeckId(decks[0]?.id ?? '')
-    setCardOpen(true)
-  }
-
-  const createCard = useMutation({
-    mutationFn: async () => {
-      const front = cardFront.trim()
-      const back = cardBack.trim()
-      if (isGuestMode()) {
-        addCard(deckId, front, back)
-      } else {
-        await cardsApi.create(deckId, { type: 'BASIC', front, back })
-      }
-    },
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: studyKeys.decks(userId) })
-      void queryClient.invalidateQueries({ queryKey: studyKeys.due(userId) })
-      setCardOpen(false)
-      setSelectedText('')
-      setFlash(t('notes.flashcardCreated'))
-      window.setTimeout(() => setFlash(null), 2600)
-    },
-  })
-
   const confirmDelete = async () => {
     if (saveTimer.current) window.clearTimeout(saveTimer.current)
     await saving.current
@@ -144,7 +113,22 @@ function NoteEditor({ note }: { note: Note }) {
     navigate('/notes')
   }
 
-  const words = (editor?.getText() ?? '').trim().split(/\s+/).filter(Boolean).length
+  const bodyText = useEditorState({ editor, selector: ({ editor }) => editor?.getText({ blockSeparator: '\n' }).trim() ?? '' }) ?? ''
+  const words = bodyText.split(/\s+/).filter(Boolean).length
+  const canStudy = !!accountId && !betaEnabled
+
+  const insertSummary = (summary: string) => {
+    if (!editor) return
+    const paragraphs = summary.split(/\r?\n/).map((line) => line.trim()).filter(Boolean)
+    const inserted = editor.commands.insertContentAt(editor.state.doc.content.size, [
+      { type: 'heading', attrs: { level: 2 }, content: [{ type: 'text', text: t('notes.study.summary') }] },
+      ...paragraphs.map((line) => ({ type: 'paragraph', content: [{ type: 'text', text: line }] })),
+    ])
+    if (inserted) {
+      setStudySource(undefined)
+      void flush().catch(() => undefined)
+    }
+  }
 
   const tools = [
     { icon: 'bold' as const, label: t('notes.bold'), active: editor?.isActive('bold'), run: () => editor?.chain().focus().toggleBold().run() },
@@ -155,8 +139,8 @@ function NoteEditor({ note }: { note: Note }) {
     { icon: 'undo' as const, label: t('common.undo'), active: false, run: () => editor?.chain().focus().undo().run() },
   ]
 
-  return (
-    <div className="space-y-3">
+  const noteEditor = (
+    <>
       <div className="flex items-center gap-2">
         <button
           onClick={() => {
@@ -193,7 +177,18 @@ function NoteEditor({ note }: { note: Note }) {
         </button>
       </div>
 
-      <div className="overflow-hidden rounded-[24px] border border-[var(--color-border)] bg-[var(--color-surface)] shadow-[var(--shadow-sm)]">
+      {canStudy && <section aria-label={t('notes.study.title')} className="flex flex-wrap items-center gap-2">
+        <Button variant="secondary" size="sm" disabled={!bodyText}
+          onClick={() => setStudySource({ kind: 'note', title, text: bodyText })}>
+          <Icon name="sparkles" size={16} /> {t('notes.study.useNote')}
+        </Button>
+        <Button variant="secondary" size="sm" disabled={!selectedText}
+          onClick={() => setStudySource({ kind: 'selection', title, text: selectedText })}>
+          {t('notes.study.useSelection')}
+        </Button>
+      </section>}
+
+      <div className="study-editor-surface study-panel">
         <div className="border-b border-[var(--color-border)] px-4 py-3 sm:px-6">
           <input
             value={title}
@@ -202,24 +197,24 @@ function NoteEditor({ note }: { note: Note }) {
               queueSave({ title: e.target.value })
             }}
             placeholder={t('notes.titlePlaceholder')}
-            className="w-full border-0 bg-transparent px-0 py-1 text-2xl font-black outline-none focus:outline-none"
+            className="w-full border-0 bg-transparent px-0 py-1 text-2xl font-semibold"
             aria-label={t('notes.titlePlaceholder')}
           />
-          <div className="mt-1 flex items-center gap-3 text-[11px] font-semibold text-[var(--color-muted)]">
+          <div className="study-muted mt-1 flex flex-wrap items-center gap-x-3 gap-y-1">
             <span>{t('notes.wordCount', { count: words })}</span>
             <span>·</span>
             <span>{t('notes.autosaveHint')}</span>
           </div>
         </div>
 
-        <div className="sticky top-16 z-10 flex flex-wrap items-center gap-1 border-b border-[var(--color-border)] bg-[var(--color-surface)]/95 px-2 py-2 backdrop-blur">
+        <div className="study-note-tools flex flex-wrap items-center gap-1 px-2 py-2" role="group" aria-label={t('notes.formatting')}>
           {tools.map((tool) => (
             <button
               key={tool.label}
               onClick={tool.run}
               aria-label={tool.label}
               aria-pressed={!!tool.active}
-              className={`flex h-10 w-10 items-center justify-center rounded-xl transition ${
+              className={`flex h-11 w-11 items-center justify-center rounded-xl transition ${
                 tool.active
                   ? 'bg-[var(--color-primary-soft)] text-[var(--color-primary)]'
                   : 'text-[var(--color-muted)] hover:bg-[var(--color-surface-alt)] hover:text-[var(--color-text)]'
@@ -233,70 +228,32 @@ function NoteEditor({ note }: { note: Note }) {
           </div>
         </div>
 
-        <EditorContent editor={editor} />
+        <div ref={passageSource}><EditorContent editor={editor} /></div>
       </div>
+    </>
+  )
+
+  return (
+    <div className="space-y-3">
+      {accountId ? <NoteAttachments key={accountId} noteId={note.id} userId={accountId}
+        onStudy={canStudy ? (file) => setStudySource({ kind: 'attachment', file }) : undefined}>
+        {noteEditor}
+      </NoteAttachments> : noteEditor}
+
+      {studySource && accountId && canStudy && <NoteStudy noteId={note.id} userId={accountId} source={studySource}
+        onClose={() => setStudySource(undefined)} onInsertSummary={insertSummary} onCardsSaved={(count) => {
+          setStudySource(undefined)
+          setFlash(t('notes.study.savedCards', { count }))
+          window.setTimeout(() => setFlash(null), 2600)
+        }} />}
 
       {flash && (
-        <p className="rounded-xl bg-[var(--color-success-soft)] px-3 py-2 text-center text-sm font-bold text-[var(--color-success)]">
+        <p role="status" className="rounded-xl bg-[var(--color-success-soft)] px-3 py-2 text-center text-sm font-bold text-[var(--color-success)]">
           {flash}
         </p>
       )}
 
-      {selectedText.length > 2 && (
-        <button
-          onClick={openCardModal}
-          className="fixed bottom-24 left-1/2 z-30 flex min-h-12 -translate-x-1/2 items-center gap-2 rounded-full bg-[var(--color-primary)] px-5 py-3 text-sm font-black text-white shadow-[0_14px_30px_rgba(37,99,235,0.35)] transition hover:-translate-y-0.5 active:scale-95 md:bottom-8"
-        >
-          <Icon name="cards" size={18} /> {t('notes.makeFlashcard')}
-        </button>
-      )}
-
-      <Modal open={cardOpen} title={t('notes.makeFlashcard')} onClose={() => setCardOpen(false)}>
-        <div className="space-y-3">
-          <div>
-            <label className="text-sm font-bold" htmlFor="flash-front">{t('decks.front')}</label>
-            <textarea
-              id="flash-front"
-              value={cardFront}
-              onChange={(e) => setCardFront(e.target.value)}
-              rows={2}
-              className="mt-1 w-full resize-none rounded-2xl px-4 py-3"
-            />
-          </div>
-          <div>
-            <label className="text-sm font-bold" htmlFor="flash-back">{t('decks.back')}</label>
-            <textarea
-              id="flash-back"
-              value={cardBack}
-              onChange={(e) => setCardBack(e.target.value)}
-              rows={2}
-              placeholder={t('decks.backPlaceholder')}
-              className="mt-1 w-full resize-none rounded-2xl px-4 py-3"
-              autoFocus
-            />
-          </div>
-          <div>
-            <label className="text-sm font-bold" htmlFor="flash-deck">{t('notes.chooseDeck')}</label>
-            <select
-              id="flash-deck"
-              value={deckId}
-              onChange={(e) => setDeckId(e.target.value)}
-              className="mt-1 w-full rounded-2xl px-4 py-2.5"
-            >
-              {decks.map((deck) => (
-                <option key={deck.id} value={deck.id}>
-                  {deck.title}
-                </option>
-              ))}
-            </select>
-          </div>
-          {createCard.isError && <p role="alert" className="text-sm text-[var(--color-danger)]">{createCard.error.message}</p>}
-          <Button full onClick={() => createCard.mutate()}
-            disabled={!cardFront.trim() || !cardBack.trim() || !deckId || createCard.isPending}>
-            <Icon name="plus" size={18} /> {t('notes.createCard')}
-          </Button>
-        </div>
-      </Modal>
+      <PassageTools source={passageSource} title={title} />
 
       <Modal open={deleteOpen} title={t('notes.deleteNote')} onClose={() => setDeleteOpen(false)}>
         <p className="text-sm text-[var(--color-muted)]">{t('notes.deleteHint')}</p>

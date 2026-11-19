@@ -3,9 +3,11 @@ package com.studexa.ai;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.times;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.contains;
 import static org.mockito.Mockito.when;
 
 import java.time.Duration;
@@ -91,6 +93,26 @@ class AiServiceTest {
     }
 
     @Test
+    void questionAndAnswerModeKeepsOnlyBasicCards() {
+        when(anthropicClient.complete(anyString(), anyString())).thenReturn("""
+                {"items":[
+                  {"type":"CLOZE","front":"Plants need {{c1::light}}.","back":"Light"},
+                  {"type":"BASIC","front":"What do plants use?","back":"Light","choices":["Light","Water"]}
+                ]}
+                """);
+
+        var result = service.generate(UUID.randomUUID(), new AiGenerateRequest(AiTask.FLASHCARDS, null,
+                "Plants use light.", "Biology notes", 5, "km", true));
+
+        assertThat(result.items()).singleElement().satisfies(card -> {
+            assertThat(card.type()).isEqualTo(CardType.BASIC);
+            assertThat(card.front()).isEqualTo("What do plants use?");
+            assertThat(card.choices()).isEmpty();
+        });
+        verify(anthropicClient).complete(anyString(), contains("with a standalone question"));
+    }
+
+    @Test
     void quizDropsQuestionsWhoseAnswerIsNotAChoice() {
         when(anthropicClient.complete(anyString(), anyString())).thenReturn("""
                 {"items":[
@@ -152,6 +174,19 @@ class AiServiceTest {
         assertThatThrownBy(() -> service.tutor(userId, new AiTutorRequest("Explain", null, null)))
                 .isInstanceOf(ApiException.class);
         verify(usageRepository).decrementUsage(userId, LocalDate.of(2026, 11, 17));
+    }
+
+    @Test
+    void refundsQuotaWhenProviderDeniesTutoringAndGeneration() {
+        when(anthropicClient.complete(anyString(), anyString())).thenThrow(
+                ApiException.serviceUnavailable("AI_PROVIDER_ACCESS_DENIED", "Provider rejected the request."));
+        UUID userId = UUID.randomUUID();
+        assertThatThrownBy(() -> service.tutor(userId, new AiTutorRequest("Explain", null, null)))
+                .isInstanceOfSatisfying(ApiException.class, error -> assertThat(error.getCode()).isEqualTo("AI_PROVIDER_ACCESS_DENIED"));
+        assertThatThrownBy(() -> service.generate(userId,
+                new AiGenerateRequest(AiTask.FLASHCARDS, null, "Study notes", "Notes", 1, "en")))
+                .isInstanceOfSatisfying(ApiException.class, error -> assertThat(error.getCode()).isEqualTo("AI_PROVIDER_ACCESS_DENIED"));
+        verify(usageRepository, times(2)).decrementUsage(userId, LocalDate.of(2026, 11, 17));
     }
 
     @Test
