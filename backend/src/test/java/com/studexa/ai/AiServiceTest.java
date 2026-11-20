@@ -156,6 +156,21 @@ class AiServiceTest {
     }
 
     @Test
+    void tutorSuppliesPriorTurnsAsContextAndChecksQuotesAgainstTheCurrentSource() {
+        when(anthropicClient.complete(anyString(), anyString())).thenReturn("""
+                {"answer":"It uses light.","references":[{"excerpt":"Text from the earlier answer."}]}
+                """);
+        var prompt = org.mockito.ArgumentCaptor.forClass(String.class);
+        var response = service.tutor(UUID.randomUUID(), new AiTutorRequest("Why does it do that?",
+                "Plants use light.", "Notes",
+                List.of(new AiTutorRequest.Turn("What happens first?", "Text from the earlier answer."))));
+        verify(anthropicClient).complete(anyString(), prompt.capture());
+        assertThat(prompt.getValue()).contains("PREVIOUS TURNS (context only):", "Why does it do that?",
+                "\"question\":\"What happens first?\"", "\"answer\":\"Text from the earlier answer.\"");
+        assertThat(response.references()).isEmpty();
+    }
+
+    @Test
     void rejectsEmptyGeneratedCardsAndRefundsQuota() {
         when(anthropicClient.complete(anyString(), anyString())).thenReturn(
                 "{\"items\":[{\"type\":\"BASIC\",\"front\":\"   \",\"back\":\"\"}]}");

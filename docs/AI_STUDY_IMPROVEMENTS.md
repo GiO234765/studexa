@@ -9,8 +9,12 @@ Implemented 17 November 2026, building on the existing tutor and card generator.
   edits. Rich-text markup is excluded. Nothing is sent until **Send** is pressed.
 - Choose Explain simply, Key points, Practice question, or Give me a hint to draft
   a localized prompt. Students can edit it before sending.
-- Inspect source quotes in expandable reference panels. The chat clearly explains
-  provider disclosure, AI fallibility, and that questions are independent.
+- Inspect source quotes in expandable reference panels. Standard follow-ups send up
+  to three successful turns to help the provider understand the question. In beta,
+  the provider receives only approved prompts and text from the selected sample.
+- The tutor keeps its thread while you navigate or close the panel. New chat,
+  reloading, and signing out clear browser-memory history. Sending with a changed
+  attachment or selecting another beta sample starts a new thread.
 - Failed requests can be retried with their original question/source snapshot.
   Retry does not duplicate the displayed question. Automatic retries are disabled.
 - Guest mode cannot send tutor requests. Offline drafts remain in component memory
@@ -42,8 +46,9 @@ Implemented 17 November 2026, building on the existing tutor and card generator.
   and ask the model to acknowledge missing source information. These instructions
   improve behavior but are not a guarantee of factual accuracy.
 
-The request/response API shapes, quota size, database schema, and XP economy are
-unchanged. No new secrets or external integrations are required.
+The standard tutor accepts an optional `history` field and the beta tutor accepts
+optional `previousPromptIds`. Existing clients can omit both fields. Quota size,
+database schema, and XP economy are unchanged.
 
 ## Verification
 

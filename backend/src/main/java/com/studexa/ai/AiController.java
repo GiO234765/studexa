@@ -80,8 +80,11 @@ public class AiController {
             @Valid @RequestBody SampleTutorRequest request) {
         StudySample sample = StudySample.find(request.sampleId());
         String question = sample.question(request.promptId());
+        List<String> previousQuestions = request.previousPromptIds() == null ? List.of()
+                : request.previousPromptIds().stream().map(sample::question).toList();
         requireBetaGemini();
-        return aiService.tutor(CurrentUser.id(jwt), new AiTutorRequest(question, sample.text(), sample.title()));
+        return aiService.tutor(CurrentUser.id(jwt), new AiTutorRequest(question, sample.text(), sample.title()),
+                previousQuestions);
     }
 
     private void requireOpenPrompts() {
@@ -100,7 +103,8 @@ public class AiController {
             @NotNull @Min(1) @Max(5) Integer count) {}
 
     public record SampleTutorRequest(@NotBlank @Size(max = 64) String sampleId,
-            @NotBlank @Size(max = 64) String promptId) {}
+            @NotBlank @Size(max = 64) String promptId,
+            @Size(max = 3) List<@NotBlank @Size(max = 64) String> previousPromptIds) {}
 
     public record SourceLimit(int maxSourceChars) {}
 }

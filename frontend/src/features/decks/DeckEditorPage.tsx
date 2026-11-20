@@ -66,6 +66,7 @@ export function DeckEditorPage() {
     if (!deckId) return
     void queryClient.invalidateQueries({ queryKey: studyKeys.decks(userId) })
     void queryClient.invalidateQueries({ queryKey: studyKeys.due(userId) })
+    void queryClient.invalidateQueries({ queryKey: studyKeys.weakCards(userId) })
   }
 
   const flash = (message: string) => {

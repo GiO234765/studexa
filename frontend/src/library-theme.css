@@ -10,18 +10,38 @@
 .study-home-welcome {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
+  grid-template-areas: 'pet date' 'title title' 'actions actions';
   align-items: center;
+  gap: .25rem .65rem;
+  margin-bottom: 0;
   background: var(--color-surface);
 }
 
-.study-welcome-pet { width: clamp(2.25rem, 7vw, 3rem); height: auto; }
-.study-welcome-copy { min-width: 0; }
-.study-welcome-copy .study-text-link { width: fit-content; height: auto; text-align: start; }
-.study-home-welcome .study-streak { grid-column: 2; justify-self: start; }
+.study-welcome-pet { grid-area: pet; width: clamp(2.25rem, 7vw, 3rem); height: auto; }
+.study-home-welcome .study-date { grid-area: date; margin: 0; overflow-wrap: anywhere; }
+.study-home-welcome h1 { grid-area: title; font-size: clamp(1.55rem, 3.6vw, 2.75rem); }
+.study-welcome-actions {
+  grid-area: actions;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: .25rem .75rem;
+  overflow-wrap: anywhere;
+}
+.study-welcome-actions .study-streak { max-width: 100%; }
+.study-welcome-actions svg { flex-shrink: 0; }
+
+@container (max-width: 19rem) {
+  .study-home-welcome { padding: .7rem; }
+  .study-home-welcome.study-page-header h1 { font-size: 1.25rem; line-height: 1.45; }
+}
 
 @container (min-width: 34rem) {
-  .study-home-welcome { grid-template-columns: auto minmax(0, 1fr) auto; }
-  .study-home-welcome .study-streak { grid-column: auto; }
+  .study-home-welcome {
+    grid-template-columns: auto minmax(0, 1fr) fit-content(45%);
+    grid-template-areas: 'pet date actions' 'pet title actions';
+  }
+  .study-welcome-actions { justify-content: flex-end; }
 }
 
 .study-pet-message {

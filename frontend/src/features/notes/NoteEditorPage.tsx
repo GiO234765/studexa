@@ -165,7 +165,7 @@ function NoteEditor({ note }: { note: Note }) {
           )}
         </div>
         {!betaEnabled && <Button variant="secondary" size="sm" disabled={!editor?.getText().trim()}
-          onClick={() => openStudyBuddy({ title, text: selectedText || editor?.getText({ blockSeparator: '\n' }) || '' })}>
+          onClick={(event) => openStudyBuddy({ title, text: selectedText || editor?.getText({ blockSeparator: '\n' }) || '' }, event.currentTarget)}>
           <Icon name="sparkles" size={16} /> {t('pet.studyNote')}
         </Button>}
         <button

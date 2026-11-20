@@ -7,7 +7,7 @@ import type { ReadingEdition, ReadingSubject } from '../../lib/api/readings'
 import { isGuestMode } from '../../lib/auth'
 import { useStudyDate } from '../../lib/study'
 import { formatStudyDate } from '../../lib/studyDate'
-import { useReadingEditions } from './useReadingEditions'
+import { dailyReadingPicks, useReadingEditions } from './useReadingEditions'
 
 const subjects = ['SCIENCE', 'HISTORY', 'LITERATURE'] as const
 
@@ -36,8 +36,7 @@ export function ReadingShelf() {
   </div>
 
   const catalog = editions.data
-  const day = Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()) / 86_400_000
-  const daily = catalog.slice(0, 3).map((_, index) => catalog[((day + index) % catalog.length + catalog.length) % catalog.length])
+  const daily = dailyReadingPicks(catalog, date)
   const search = query.trim().toLowerCase()
   const matches = catalog.filter((item) => (subject === 'all' || item.subject === subject) &&
     [item.title, item.author, item.section, item.subject, t('reading.subjects.' + item.subject)].join(' ').toLowerCase().includes(search))

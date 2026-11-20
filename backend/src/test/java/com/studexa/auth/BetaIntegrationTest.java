@@ -112,6 +112,31 @@ class BetaIntegrationTest {
     }
 
     @Test
+    void betaFollowUpsResolveOnlyQuestionsFromTheSelectedSample() throws Exception {
+        String auth = authHeader();
+        String base = """
+                {"sampleId":"water-cycle-km","promptId":"compare","previousPromptIds":%s,
+                 "history":[{"question":"private prompt","answer":"private answer"}]}
+                """;
+        send("/api/v1/ai/samples/tutor", auth, base.formatted("[\"outside-the-catalog\"]"))
+                .andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("AI_UNKNOWN_PROMPT"));
+        send("/api/v1/ai/samples/tutor", auth, base.formatted("[\"explain\",\"explain\",\"explain\",\"explain\"]"))
+                .andExpect(status().isBadRequest());
+        verifyNoInteractions(gemini);
+
+        when(gemini.complete(anyString(), anyString())).thenReturn("""
+                {"answer":"ចម្លើយ","references":[]}
+                """);
+        send("/api/v1/ai/samples/tutor", auth, base.formatted("[\"explain\"]"))
+                .andExpect(status().isOk());
+        var prompt = org.mockito.ArgumentCaptor.forClass(String.class);
+        verify(gemini).complete(anyString(), prompt.capture());
+        assertThat(prompt.getValue()).contains("PREVIOUS SAMPLE QUESTIONS (context only):",
+                "សូមពន្យល់ពីរបៀបដែលពពកកើតឡើង។")
+                .doesNotContain("Explain how clouds form.", "private prompt", "private answer");
+    }
+
+    @Test
     void betaBuildsBookStudyPromptsFromTheApprovedPassage() throws Exception {
         String auth = authHeader();
         var edition = readings.list().getFirst();

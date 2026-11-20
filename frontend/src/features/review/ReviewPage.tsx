@@ -16,7 +16,8 @@ import { studyKeys, useDueCards } from '../../lib/study'
 import { useApp } from '../../lib/store'
 import { isGuestMode, useAuth } from '../../lib/auth'
 import { useOnline } from '../../lib/useSettings'
-import { queuePendingAnswer, getPendingAnswers, removePendingAnswer } from '../../lib/offlineDb'
+import { queuePendingAnswer } from '../../lib/offlineDb'
+import { ReviewCardContent } from './ReviewCardContent'
 
 type Rating = 'again' | 'hard' | 'good' | 'easy'
 type RatingLog = { rating: Rating; correct: boolean; response: ReviewAnswerResponse | null }
@@ -40,44 +41,7 @@ function shuffle<T>(items: T[]): T[] {
 export function ReviewPage() {
   const { t } = useTranslation()
   const userId = useAuth((state) => state.user?.id)
-  const queryClient = useQueryClient()
   const dueQuery = useDueCards()
-
-  // Replay pending offline answers when the component mounts or comes back online
-  useEffect(() => {
-    if (!userId) return
-    let synced = false
-    let disposed = false
-    const isCurrent = () => !disposed && useAuth.getState().user?.id === userId
-    const syncPending = async () => {
-      if (synced || !isCurrent()) return
-      synced = true
-      try {
-        const pending = await getPendingAnswers(userId)
-        for (const p of pending) {
-          if (!isCurrent()) break
-          await reviewApi.answer({
-            cardId: p.cardId,
-            rating: p.rating.toUpperCase() as ReviewRating,
-            msTaken: 0,
-            clientReviewId: p.clientReviewId,
-          })
-          if (isCurrent()) void queryClient.invalidateQueries({ queryKey: studyKeys.dailyReviewProgress(userId) })
-          if (p.id !== undefined) await removePendingAnswer(p.id)
-        }
-      } finally {
-        synced = false
-      }
-    }
-    const retryPending = () => { void syncPending().catch(() => undefined) }
-
-    retryPending()
-    window.addEventListener('online', retryPending)
-    return () => {
-      disposed = true
-      window.removeEventListener('online', retryPending)
-    }
-  }, [queryClient, userId])
 
   if (dueQuery.data) {
     return <ReviewSession key={userId} dueQuery={dueQuery} initialCards={dueQuery.data} userId={userId} />
@@ -168,6 +132,7 @@ function ReviewSession({ dueQuery, initialCards, userId }: {
       // Report quest progress: warmup counts reviewed cards toward daily quest
       if (response && userId) {
         void queryClient.invalidateQueries({ queryKey: studyKeys.dailyReviewProgress(userId) })
+        void queryClient.invalidateQueries({ queryKey: studyKeys.weakCards(userId) })
         void questApi.progress({ code: 'warmup', source: 'review_card', referenceId: variables.clientReviewId })
           .then(() => queryClient.invalidateQueries({ queryKey: studyKeys.questsToday(userId) }))
           .catch(() => undefined)
@@ -258,6 +223,7 @@ function ReviewSession({ dueQuery, initialCards, userId }: {
       void queryClient.invalidateQueries({ queryKey: studyKeys.due(userId) })
       void queryClient.invalidateQueries({ queryKey: studyKeys.decks(userId) })
       void queryClient.invalidateQueries({ queryKey: studyKeys.dailyReviewProgress(userId) })
+      void queryClient.invalidateQueries({ queryKey: studyKeys.weakCards(userId) })
     } catch {
       setActionError('undo')
     } finally {
@@ -423,27 +389,7 @@ function ReviewSession({ dueQuery, initialCards, userId }: {
             if (!actionPending.current) setFlipped((visible) => !visible)
           }}
         >
-          <span id="review-card-content" className="review-card-content" aria-live="polite">
-            <span className="min-w-0">
-              <span className="review-card-label">{t('review.front')}</span>
-              <span className={flipped ? 'block text-base whitespace-pre-wrap' : 'review-card-text'}>{current?.front}</span>
-            </span>
-            {flipped && (
-              <span className="review-answer-content">
-                <span className="review-card-label">{t('review.back')}</span>
-                <span className="review-card-text">{current?.back}</span>
-                {typeof current?.extra?.explanation === 'string' && current.extra.explanation && (
-                  <span className="study-muted mt-3 block whitespace-pre-wrap">{current.extra.explanation}</span>
-                )}
-                {(current?.sourceTitle || current?.sourceExcerpt) && (
-                  <span className="mt-4 block rounded-xl bg-(--color-surface-alt) p-3 text-sm">
-                    <span className="block font-semibold">{current.sourceTitle || t('decks.source')}</span>
-                    {current.sourceExcerpt && <span className="study-muted mt-1 block whitespace-pre-wrap">{current.sourceExcerpt}</span>}
-                  </span>
-                )}
-              </span>
-            )}
-          </span>
+          <ReviewCardContent card={current} flipped={flipped} />
           <span className="review-reveal-label">
             <Icon name={flipped ? 'chevronUp' : 'chevronDown'} size={18} />
             {t(flipped ? 'workspace.hideAnswer' : 'workspace.showAnswer')}
